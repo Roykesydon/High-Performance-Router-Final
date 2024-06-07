@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "constants.h"
+#include "table_model.h"
 #include "tree_model.h"
 
 using namespace std;
@@ -67,12 +68,6 @@ class BufferPacket {
     }
 };
 
-// constraints
-const ll INITIAL_RANGE = 20;
-const ll DELTA = 3;
-const ll MAX_WAITING_PACKETS = 1000;
-const ll MAX_WAITING_FLOWS = 60;
-
 unordered_map<bitset<RULE_COUNT>, ll> max_seq_num_map;
 unordered_map<bitset<RULE_COUNT>, int> flow_to_id;
 unordered_map<int, bitset<RULE_COUNT>> id_to_flow;
@@ -83,6 +78,18 @@ vector<Packet> packets;
 
 // models
 TreeModelNode *root = new TreeModelNode();
+TableModel table_model = TableModel();
+
+vector<int> search_possible_flows(bitset<RULE_COUNT> packet_bitmap) {
+    vector<int> possible_flow_ids;
+    if (packet_bitmap.count() >= TABLE_ONE_THRESHOLD)
+        possible_flow_ids =
+            table_model.search(packet_bitmap, flow_to_id.size());
+    else
+        possible_flow_ids = search_tree_model(root, packet_bitmap);
+
+    return possible_flow_ids;
+}
 
 void update_packet(int packet_index, int flow_id) {
     packets[packet_index].missing_fields_bit_match = id_to_flow[flow_id];
@@ -108,7 +115,7 @@ bool in_buffer_match(int packet_index) {
     Packet packet = packets[packet_index];
 
     possible_flow_ids =
-        search_tree_model(root, packet.missing_fields_bit_match);
+        search_possible_flows(packets[packet_index].missing_fields_bit_match);
 
     packets[packet_index].set_last_case_type(
         possible_flow_ids.size() == 1
@@ -121,8 +128,8 @@ bool in_buffer_match(int packet_index) {
     } else if (possible_flow_ids.size() > 1) {  // case 3: multiple matches
         vector<int> filtered_possible_flow_ids;
         for (int flow_id : possible_flow_ids) {
-            if (abs(max_seq_num_map[id_to_flow[flow_id]] -
-                    packet.seq_num) <= DELTA)
+            if (abs(max_seq_num_map[id_to_flow[flow_id]] - packet.seq_num) <=
+                DELTA)
                 filtered_possible_flow_ids.push_back(flow_id);
         }
         if (filtered_possible_flow_ids.size() == 1) {
@@ -167,10 +174,6 @@ void update_buffer(int cur_packet_index, int cur_flow_index,
 
     for (auto it : to_remove) buffer.erase(it);
 }
-
-// ------------------- Table Model -------------------
-
-// ------------------- Main -------------------
 
 int main() {
     const string PACKET_FILE_NAME = "enhanced_acl_1k_trace.txt";
@@ -218,14 +221,17 @@ int main() {
                 max(max_seq_num_map[packet.missing_fields_bit_match],
                     packet.seq_num);
 
-            // update tree model
+            // has new flow
             if (flow_to_id.find(packet.missing_fields_bit_match) ==
                 flow_to_id.end()) {
                 flow_to_id[packet.missing_fields_bit_match] = flow_to_id.size();
                 id_to_flow[flow_to_id[packet.missing_fields_bit_match]] =
                     packet.missing_fields_bit_match;
+
                 update_tree_model(root, packet.missing_fields_bit_match,
                                   flow_to_id[packet.missing_fields_bit_match]);
+                table_model.insert(packet.missing_fields_bit_match,
+                                   flow_to_id[packet.missing_fields_bit_match]);
 
                 // update buffer
                 update_buffer(i, flow_to_id.size(), true);
