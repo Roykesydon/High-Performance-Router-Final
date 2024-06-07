@@ -14,6 +14,5 @@ python generate_flow_data.py
 
 ### Compile and Run
 ```bash
-g++ main.cpp tree_model.cpp
-./a.out
+bash run.sh
 ```
