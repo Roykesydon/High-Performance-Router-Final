@@ -12,7 +12,7 @@ Implement algorithm of field-missing packet recovery.
 python generate_flow_data.py
 ```
 
-### Compile and Run
+### How to run
 ```bash
 bash run.sh
 ```
