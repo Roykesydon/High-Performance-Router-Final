@@ -151,7 +151,7 @@ def process_trace(trace_filename, acl_filename, output_filename):
                 flow_bitmatch = random.choice(list(flows_count.keys()))
 
             if flow_bitmatch not in flows_count:
-                flows_start[flow_bitmatch] = random.randint(0, 10000)
+                flows_start[flow_bitmatch] = random.randint(0, 1000)
                 flows_count[flow_bitmatch] = flows_start[flow_bitmatch]
             if flows_count[flow_bitmatch] == flows_start[flow_bitmatch] + 100:
                 del bit_match_to_packet[flow_bitmatch]
