@@ -1,3 +1,5 @@
+#include <sys/resource.h>
+
 #include <bitset>
 #include <chrono>
 #include <fstream>
@@ -76,9 +78,18 @@ list<BufferPacket> buffer;
 
 vector<Packet> packets;
 
+// analysis
+double total_packet_processing_time = 0;
+
 // models
-TreeModelNode *root = new TreeModelNode();
+TreeModelNode* root = new TreeModelNode();
 TableModel table_model = TableModel();
+
+void logMemoryUsage(const string& message) {
+    struct rusage usage;
+    getrusage(RUSAGE_SELF, &usage);
+    cout << message << " - Memory usage: " << usage.ru_maxrss << " KB" << endl;
+}
 
 vector<int> search_possible_flows(bitset<RULE_COUNT> packet_bitmap) {
     vector<int> possible_flow_ids;
@@ -176,9 +187,12 @@ void update_buffer(int cur_packet_index, int cur_flow_index,
 }
 
 int main() {
+    logMemoryUsage("After reading packets");
+
     const string PACKET_FILE_NAME = "enhanced_acl_1k_trace.txt";
 
-    std::chrono::steady_clock::time_point time_begin, time_end;
+    std::chrono::steady_clock::time_point time_begin, time_end,
+        start_processing_time, end_processing_time;
 
     // read packet file
     ifstream packet_file(PACKET_FILE_NAME);
@@ -211,6 +225,7 @@ int main() {
 
     // start time
     time_begin = std::chrono::steady_clock::now();
+    start_processing_time = std::chrono::steady_clock::now();
 
     for (int i = 0; i < packets.size(); i++) {
         Packet packet = packets[i];
@@ -268,19 +283,26 @@ int main() {
         }
 
         if (i % (packets.size() / 10) == 0) {
+            logMemoryUsage("Mid-processing");
+
             time_end = std::chrono::steady_clock::now();
             cout << "Progress: " << (double)i / (double)packets.size() * 100
                  << "%" << endl;
             cout << "Time elapsed: "
-                 << int(std::chrono::duration_cast<std::chrono::milliseconds>(
+                 << int(std::chrono::duration_cast<std::chrono::microseconds>(
                             time_end - time_begin)
                             .count() /
-                        1000.0)
+                        1000000.0)
                  << " s" << endl;
         }
     }
 
     update_buffer(packets.size(), flow_to_id.size(), true);
+
+    total_packet_processing_time =
+        std::chrono::duration_cast<std::chrono::microseconds>(
+            std::chrono::steady_clock::now() - start_processing_time)
+            .count();
 
     // summary packet status
     int correct_recovery = 0;
@@ -325,6 +347,12 @@ int main() {
     cout << "Accuracy: "
          << (double)correct_packets / (double)packets.size() * 100 << "%"
          << endl;
+    cout << "Total packet processing time: " << total_packet_processing_time
+         << " microseconds" << endl;
+    cout << "Average packet processing time: "
+         << total_packet_processing_time / packets.size() << " microseconds" << endl;
+
+    logMemoryUsage("End of processing");
 
     return 0;
 }
